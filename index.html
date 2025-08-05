@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFindex Vault</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Stellar SDK for JavaScript - required for keypair generation and signing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stellar-sdk/11.0.0/stellar-sdk.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+        .section h2 {
+            color: #34495e;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="number"],
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 1em;
+            box-sizing: border-box;
+            background-color: #f5f5f5; /* Slightly greyed out for auto-filled */
+        }
+        input[type="text"]:read-only {
+            background-color: #e9ecef;
+            cursor: default;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            width: 100%;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.3);
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        .yield-info p {
+            margin-bottom: 8px;
+            font-size: 1em;
+            color: #444;
+        }
+        .yield-info strong {
+            color: #007bff;
+        }
+        #walletActionButtons button {
+            background-color: #28a745;
+            margin-top: 10px;
+        }
+        #walletActionButtons button:hover {
+            background-color: #218838;
+        }
+        #importWalletSection {
+            display: none; /* Hidden by default */
+            margin-top: 20px;
+        }
+        #walletSecretKey {
+            font-family: monospace;
+            word-break: break-all;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DeFindex Vault Mini App</h1>
+
+        <div class="section">
+            <h2>Your Local Wallet</h2>
+            <div id="walletActionButtons">
+                <button id="createNewWalletBtn">Create New Wallet</button>
+                <button id="showImportWalletBtn">Import Existing Wallet</button>
+            </div>
+            <div id="importWalletSection">
+                <label for="importSecretKey">Enter Secret Key (S...):</label>
+                <input type="text" id="importSecretKey" placeholder="S...">
+                <button id="importWalletBtn">Import Wallet</button>
+            </div>
+            <p id="walletStatus" style="text-align: center; margin-top: 15px; margin-bottom: 10px; font-weight: bold;"></p>
+            <p id="walletPublicKey" style="text-align: center; font-size: 0.9em; word-break: break-all;"></p>
+            <p id="walletSecretKey" style="display: none;"></p>
+            <p style="text-align: center; font-size: 0.8em; color: #dc3545; margin-top: 10px;">
+                <strong style="color: #dc3545;">WARNING:</strong> For testing only. Storing secret keys in `localStorage` is NOT secure.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2>Deposit Funds</h2>
+            <label for="depositAmount">Amount (XLM):</label>
+            <input type="number" id="depositAmount" value="10" min="0.001" step="0.001">
+            <label for="depositUserAddress">Your Stellar Public Key:</label>
+            <input type="text" id="depositUserAddress" placeholder="Create or Import Wallet" readonly>
+            <button id="depositBtn" disabled>Deposit</button>
+        </div>
+
+        <div class="section">
+            <h2>Withdraw Funds</h2>
+            <label for="withdrawAmount">Amount (XLM):</label>
+            <input type="number" id="withdrawAmount" value="5" min="0.001" step="0.001">
+            <label for="withdrawUserAddress">Your Stellar Public Key:</label>
+            <input type="text" id="withdrawUserAddress" placeholder="Create or Import Wallet" readonly>
+            <button id="withdrawBtn" disabled>Withdraw</button>
+        </div>
+
+        <div class="section">
+            <h2>Your Yields</h2>
+            <label for="yieldUserAddress">Your Stellar Public Key:</label>
+            <input type="text" id="yieldUserAddress" placeholder="Create or Import Wallet" readonly>
+            <button id="getYieldsBtn" disabled>Get Yields</button>
+            <div id="yieldInfo" class="yield-info">
+                <p>Current Yield: <strong>N/A</strong></p>
+                <p>Total Deposited: <strong>N/A</strong></p>
+            </div>
+        </div>
+
+        <div id="messageBox" class="message"></div>
+        <div id="loadingIndicator" class="loading">Processing transaction...</div>
+    </div>
+
+    <script>
+        // Initialize Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand(); // Expand the mini app to full screen
+
+        // Backend API URL (replace with your actual Python backend URL)
+        // IMPORTANT: If running your Flask backend locally, you MUST use ngrok or a similar tool
+        // to expose it publicly via HTTPS. Replace this URL with the ngrok HTTPS URL for your backend.
+        // Example: 'https://your-ngrok-subdomain.ngrok-free.app/api'
+        const BACKEND_API_URL = 'http://localhost:5000/api';
+        console.log('Backend API URL:', BACKEND_API_URL); // Log the URL for debugging
+
+        // UI Elements - Wallet Management
+        const createNewWalletBtn = document.getElementById('createNewWalletBtn');
+        const showImportWalletBtn = document.getElementById('showImportWalletBtn');
+        const importWalletSection = document.getElementById('importWalletSection');
+        const importSecretKeyInput = document.getElementById('importSecretKey');
+        const importWalletBtn = document.getElementById('importWalletBtn');
+        const walletStatus = document.getElementById('walletStatus');
+        const walletPublicKeyDisplay = document.getElementById('walletPublicKey');
+        const walletSecretKeyDisplay = document.getElementById('walletSecretKey');
+
+        // UI Elements - DeFindex Operations
+        const depositAmountInput = document.getElementById('depositAmount');
+        const depositUserAddressInput = document.getElementById('depositUserAddress');
+        const depositBtn = document.getElementById('depositBtn');
+
+        const withdrawAmountInput = document.getElementById('withdrawAmount');
+        const withdrawUserAddressInput = document.getElementById('withdrawUserAddress');
+        const withdrawBtn = document.getElementById('withdrawBtn');
+
+        const yieldUserAddressInput = document.getElementById('yieldUserAddress');
+        const getYieldsBtn = document.getElementById('getYieldsBtn');
+        const yieldInfoDiv = document.getElementById('yieldInfo');
+
+        const messageBox = document.getElementById('messageBox');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        let localKeypair = null; // Stores the StellarSdk.Keypair object
+
+        // --- Helper Functions ---
+        function showMessage(text, type) {
+            messageBox.textContent = text;
+            messageBox.className = `message ${type}`;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 5000); // Hide after 5 seconds
+        }
+
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+        }
+
+        function updateUIForWallet() {
+            if (localKeypair) {
+                walletStatus.textContent = 'Wallet Loaded';
+                walletStatus.style.color = '#28a745'; // Green
+                walletPublicKeyDisplay.textContent = `Public Key: ${localKeypair.publicKey()}`;
+                walletSecretKeyDisplay.textContent = `Secret Key: ${localKeypair.secret()}`;
+                walletSecretKeyDisplay.style.display = 'block'; // Show secret key (for demo only!)
+
+                depositUserAddressInput.value = localKeypair.publicKey();
+                withdrawUserAddressInput.value = localKeypair.publicKey();
+                yieldUserAddressInput.value = localKeypair.publicKey();
+
+                depositBtn.disabled = false;
+                withdrawBtn.disabled = false;
+                getYieldsBtn.disabled = false;
+
+                createNewWalletBtn.disabled = true;
+                showImportWalletBtn.disabled = true;
+                importWalletSection.style.display = 'none'; // Hide import section
+            } else {
+                walletStatus.textContent = 'No Wallet Loaded';
+                walletStatus.style.color = '#dc3545'; // Red
+                walletPublicKeyDisplay.textContent = '';
+                walletSecretKeyDisplay.textContent = '';
+                walletSecretKeyDisplay.style.display = 'none';
+
+                depositUserAddressInput.value = '';
+                withdrawUserAddressInput.value = '';
+                yieldUserAddressInput.value = '';
+
+                depositBtn.disabled = true;
+                withdrawBtn.disabled = true;
+                getYieldsBtn.disabled = true;
+
+                createNewWalletBtn.disabled = false;
+                showImportWalletBtn.disabled = false;
+            }
+        }
+
+        // --- Wallet Management Functions ---
+        function createNewWallet() {
+            try {
+                const keypair = StellarSdk.Keypair.random();
+                localKeypair = keypair;
+                localStorage.setItem('stellarSecretKey', keypair.secret()); // Store secret key (WARNING: INSECURE)
+                showMessage('New wallet created! Fund it with Friendbot to use.', 'success');
+                updateUIForWallet();
+            } catch (error) {
+                console.error('Error creating wallet:', error);
+                showMessage('Failed to create new wallet.', 'error');
+            }
+        }
+
+        function importWallet() {
+            const secretKey = importSecretKeyInput.value.trim();
+            if (!secretKey) {
+                showMessage('Please enter a secret key.', 'error');
+                return;
+            }
+            try {
+                const keypair = StellarSdk.Keypair.fromSecret(secretKey);
+                localKeypair = keypair;
+                localStorage.setItem('stellarSecretKey', secretKey); // Store secret key (WARNING: INSECURE)
+                showMessage('Wallet imported successfully!', 'success');
+                updateUIForWallet();
+            } catch (error) {
+                console.error('Error importing wallet:', error);
+                showMessage('Invalid secret key. Please check it.', 'error');
+            }
+        }
+
+        async function signAndSubmitTransaction(unsignedXDR) {
+            if (!localKeypair) {
+                showMessage('No wallet loaded. Please create or import one.', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                // Parse the unsigned XDR into a Transaction object
+                const transaction = StellarSdk.TransactionBuilder.fromXDR(unsignedXDR, StellarSdk.Networks.TESTNET);
+
+                // Sign the transaction with the local keypair
+                transaction.sign(localKeypair);
+                const signedXDR = transaction.toXDR();
+                console.log('Transaction signed by local wallet:', signedXDR);
+
+                // Submit the signed transaction to your backend
+                const response = await fetch(`${BACKEND_API_URL}/submit_signed_tx`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ signed_xdr: signedXDR }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Transaction submitted successfully! Hash: ${data.transaction_hash}`, 'success');
+                    console.log('Transaction Hash:', data.transaction_hash);
+                } else {
+                    showMessage(`Error submitting transaction: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Sign/Submit transaction error:', error);
+                showMessage(`An error occurred during transaction signing or submission: ${error.message || 'Unknown error'}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Event Listeners ---
+        createNewWalletBtn.addEventListener('click', createNewWallet);
+        showImportWalletBtn.addEventListener('click', () => {
+            importWalletSection.style.display = 'block';
+            showMessage('WARNING: Storing secret keys in localStorage is NOT secure for real funds.', 'warning');
+        });
+        importWalletBtn.addEventListener('click', importWallet);
+
+
+        depositBtn.addEventListener('click', async () => {
+            const amount = parseFloat(depositAmountInput.value);
+            const userAddress = localKeypair ? localKeypair.publicKey() : null;
+
+            if (isNaN(amount) || amount <= 0 || !userAddress) {
+                showMessage('Please enter a valid amount and ensure a wallet is loaded.', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                // Request unsigned transaction XDR from backend
+                const response = await fetch(`${BACKEND_API_URL}/deposit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ amount: amount.toString(), user_address: userAddress }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    await signAndSubmitTransaction(data.unsigned_xdr);
+                } else {
+                    showMessage(`Error preparing deposit: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Deposit error:', error);
+                showMessage('An error occurred during deposit. Please check console.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        withdrawBtn.addEventListener('click', async () => {
+            const amount = parseFloat(withdrawAmountInput.value);
+            const userAddress = localKeypair ? localKeypair.publicKey() : null;
+
+            if (isNaN(amount) || amount <= 0 || !userAddress) {
+                showMessage('Please enter a valid amount and ensure a wallet is loaded.', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                // Request unsigned transaction XDR from backend
+                const response = await fetch(`${BACKEND_API_URL}/withdraw`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ amount: amount.toString(), user_address: userAddress }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    await signAndSubmitTransaction(data.unsigned_xdr);
+                } else {
+                    showMessage(`Error preparing withdrawal: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Withdraw error:', error);
+                showMessage('An error occurred during withdrawal. Please check console.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+
+        getYieldsBtn.addEventListener('click', async () => {
+            const userAddress = localKeypair ? localKeypair.publicKey() : null;
+            if (!userAddress) {
+                showMessage('Please create or import a wallet to get yields.', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${BACKEND_API_URL}/yields?user_address=${userAddress}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    yieldInfoDiv.innerHTML = `
+                        <p>Current Yield: <strong>${data.current_yield || '0'} XLM</strong></p>
+                        <p>Total Deposited: <strong>${data.total_deposited || '0'} XLM</strong></p>
+                    `;
+                    showMessage('Yield data fetched successfully!', 'success');
+                } else {
+                    yieldInfoDiv.innerHTML = `<p>Error fetching yields.</p>`;
+                    showMessage(`Error fetching yields: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Get yields error:', error);
+                showMessage('An error occurred while fetching yields.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Initial check for locally stored wallet on load
+        window.addEventListener('load', () => {
+            const storedSecretKey = localStorage.getItem('stellarSecretKey');
+            if (storedSecretKey) {
+                try {
+                    localKeypair = StellarSdk.Keypair.fromSecret(storedSecretKey);
+                    showMessage('Wallet reloaded from last session.', 'success');
+                } catch (e) {
+                    console.error('Error loading stored secret key:', e);
+                    localStorage.removeItem('stellarSecretKey'); // Clear invalid key
+                    showMessage('Invalid stored wallet. Please create or import again.', 'error');
+                }
+            }
+            updateUIForWallet();
+        });
+    </script>
+</body>
+</html>

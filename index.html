@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeFindex Vault</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Stellar SDK for JavaScript - required for keypair generation and signing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stellar-sdk/11.0.0/stellar-sdk.min.js"></script>
     <style>
         body {
@@ -157,6 +156,15 @@
             margin-top: 10px;
             font-size: 0.9em;
         }
+        .contract-id-display {
+            font-size: 0.9em;
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            word-break: break-all;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
@@ -182,6 +190,24 @@
             </p>
         </div>
 
+        <div class="section">
+            <h2>Create DeFindex Vault</h2>
+            <label for="vaultNameInput">Vault Name:</label>
+            <input type="text" id="vaultNameInput" placeholder="e.g., My New Vault">
+            <label for="vaultSymbolInput">Vault Symbol:</label>
+            <input type="text" id="vaultSymbolInput" placeholder="e.g., MYVAULT">
+            <label for="vaultAssetIdInput">Asset ID (Contract ID):</label>
+            <input type="text" id="vaultAssetIdInput" placeholder="e.g., CA... (Soroban Token Contract ID)">
+            <button id="createVaultBtn">Create Vault</button>
+        </div>
+        <div class="section">
+            <h2>Current Active Vault</h2>
+            <div class="contract-id-display" id="activeVaultId">No vault created or loaded.</div>
+            <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
+                This ID will be used for deposit, withdraw, and yields.
+            </p>
+        </div>
+        
         <div class="section">
             <h2>Deposit Funds</h2>
             <label for="depositAmount">Amount (XLM):</label>
@@ -216,17 +242,12 @@
     </div>
 
     <script>
-        // Initialize Telegram Web App
         const tg = window.Telegram.WebApp;
         tg.ready();
-        tg.expand(); // Expand the mini app to full screen
+        tg.expand();
 
-        // Backend API URL (replace with your actual Python backend URL)
-        // IMPORTANT: If running your Flask backend locally, you MUST use ngrok or a similar tool
-        // to expose it publicly via HTTPS. Replace this URL with the ngrok HTTPS URL for your backend.
-        // Example: 'https://your-ngrok-subdomain.ngrok-free.app/api'
-        const BACKEND_API_URL = 'http://127.0.0.1:5000/api'; //'http://localhost:5000/api';
-        console.log('Backend API URL:', BACKEND_API_URL); // Log the URL for debugging
+        const BACKEND_API_URL = 'http://127.0.0.1:5000/api';
+        console.log('Backend API URL:', BACKEND_API_URL);
 
         // UI Elements - Wallet Management
         const createNewWalletBtn = document.getElementById('createNewWalletBtn');
@@ -237,6 +258,13 @@
         const walletStatus = document.getElementById('walletStatus');
         const walletPublicKeyDisplay = document.getElementById('walletPublicKey');
         const walletSecretKeyDisplay = document.getElementById('walletSecretKey');
+
+        // UI Elements - Vault Creation
+        const createVaultBtn = document.getElementById('createVaultBtn');
+        const vaultNameInput = document.getElementById('vaultNameInput');
+        const vaultSymbolInput = document.getElementById('vaultSymbolInput');
+        const vaultAssetIdInput = document.getElementById('vaultAssetIdInput');
+        const activeVaultIdDisplay = document.getElementById('activeVaultId');
 
         // UI Elements - DeFindex Operations
         const depositAmountInput = document.getElementById('depositAmount');
@@ -254,7 +282,8 @@
         const messageBox = document.getElementById('messageBox');
         const loadingIndicator = document.getElementById('loadingIndicator');
 
-        let localKeypair = null; // Stores the StellarSdk.Keypair object
+        let localKeypair = null;
+        let activeContractId = null;
 
         // --- Helper Functions ---
         function showMessage(text, type) {
@@ -263,7 +292,7 @@
             messageBox.style.display = 'block';
             setTimeout(() => {
                 messageBox.style.display = 'none';
-            }, 5000); // Hide after 5 seconds
+            }, 5000);
         }
 
         function showLoading(show) {
@@ -273,25 +302,26 @@
         function updateUIForWallet() {
             if (localKeypair) {
                 walletStatus.textContent = 'Wallet Loaded';
-                walletStatus.style.color = '#28a745'; // Green
+                walletStatus.style.color = '#28a745';
                 walletPublicKeyDisplay.textContent = `Public Key: ${localKeypair.publicKey()}`;
                 walletSecretKeyDisplay.textContent = `Secret Key: ${localKeypair.secret()}`;
-                walletSecretKeyDisplay.style.display = 'block'; // Show secret key (for demo only!)
+                walletSecretKeyDisplay.style.display = 'block';
 
                 depositUserAddressInput.value = localKeypair.publicKey();
                 withdrawUserAddressInput.value = localKeypair.publicKey();
                 yieldUserAddressInput.value = localKeypair.publicKey();
 
-                depositBtn.disabled = false;
-                withdrawBtn.disabled = false;
-                getYieldsBtn.disabled = false;
+                depositBtn.disabled = !activeContractId;
+                withdrawBtn.disabled = !activeContractId;
+                getYieldsBtn.disabled = !activeContractId;
+                createVaultBtn.disabled = false;
 
                 createNewWalletBtn.disabled = true;
                 showImportWalletBtn.disabled = true;
-                importWalletSection.style.display = 'none'; // Hide import section
+                importWalletSection.style.display = 'none';
             } else {
                 walletStatus.textContent = 'No Wallet Loaded';
-                walletStatus.style.color = '#dc3545'; // Red
+                walletStatus.style.color = '#dc3545';
                 walletPublicKeyDisplay.textContent = '';
                 walletSecretKeyDisplay.textContent = '';
                 walletSecretKeyDisplay.style.display = 'none';
@@ -299,14 +329,23 @@
                 depositUserAddressInput.value = '';
                 withdrawUserAddressInput.value = '';
                 yieldUserAddressInput.value = '';
+                activeVaultIdDisplay.textContent = 'No vault created or loaded.';
 
                 depositBtn.disabled = true;
                 withdrawBtn.disabled = true;
                 getYieldsBtn.disabled = true;
+                createVaultBtn.disabled = true;
 
                 createNewWalletBtn.disabled = false;
                 showImportWalletBtn.disabled = false;
             }
+        }
+
+        function updateUIForVault(contractId) {
+            activeContractId = contractId;
+            activeVaultIdDisplay.textContent = contractId;
+            localStorage.setItem('defindexContractId', contractId);
+            updateUIForWallet();
         }
 
         // --- Wallet Management Functions ---
@@ -314,7 +353,7 @@
             try {
                 const keypair = StellarSdk.Keypair.random();
                 localKeypair = keypair;
-                localStorage.setItem('stellarSecretKey', keypair.secret()); // Store secret key (WARNING: INSECURE)
+                localStorage.setItem('stellarSecretKey', keypair.secret());
                 showMessage('New wallet created! Fund it with Friendbot to use.', 'success');
                 updateUIForWallet();
             } catch (error) {
@@ -332,7 +371,7 @@
             try {
                 const keypair = StellarSdk.Keypair.fromSecret(secretKey);
                 localKeypair = keypair;
-                localStorage.setItem('stellarSecretKey', secretKey); // Store secret key (WARNING: INSECURE)
+                localStorage.setItem('stellarSecretKey', secretKey);
                 showMessage('Wallet imported successfully!', 'success');
                 updateUIForWallet();
             } catch (error) {
@@ -341,7 +380,7 @@
             }
         }
 
-        async function signAndSubmitTransaction(unsignedXDR) {
+        async function signAndSubmitTransaction(unsignedXDR, context) {
             if (!localKeypair) {
                 showMessage('No wallet loaded. Please create or import one.', 'error');
                 return;
@@ -349,15 +388,11 @@
 
             showLoading(true);
             try {
-                // Parse the unsigned XDR into a Transaction object
                 const transaction = StellarSdk.TransactionBuilder.fromXDR(unsignedXDR, StellarSdk.Networks.TESTNET);
-
-                // Sign the transaction with the local keypair
                 transaction.sign(localKeypair);
                 const signedXDR = transaction.toXDR();
                 console.log('Transaction signed by local wallet:', signedXDR);
 
-                // Submit the signed transaction to your backend
                 const response = await fetch(`${BACKEND_API_URL}/submit_signed_tx`, {
                     method: 'POST',
                     headers: {
@@ -371,6 +406,11 @@
                 if (response.ok) {
                     showMessage(`Transaction submitted successfully! Hash: ${data.transaction_hash}`, 'success');
                     console.log('Transaction Hash:', data.transaction_hash);
+                    
+                    if (context === 'create_vault' && data.contract_id) {
+                        updateUIForVault(data.contract_id);
+                        showMessage(`Vault created successfully! ID: ${data.contract_id}`, 'success');
+                    }
                 } else {
                     showMessage(`Error submitting transaction: ${data.error || 'Unknown error'}`, 'error');
                 }
@@ -390,19 +430,69 @@
         });
         importWalletBtn.addEventListener('click', importWallet);
 
+        // NEW: Event listener for creating a vault
+        createVaultBtn.addEventListener('click', async () => {
+            const vaultName = vaultNameInput.value.trim();
+            const vaultSymbol = vaultSymbolInput.value.trim();
+            const assetId = vaultAssetIdInput.value.trim();
+            const userAddress = localKeypair ? localKeypair.publicKey() : null;
+
+            if (!vaultName || !vaultSymbol || !assetId || !userAddress) {
+                showMessage('Please fill all vault fields and ensure a wallet is loaded.', 'error');
+                return;
+            }
+
+            // In a real app, you would need to get these from a configuration or from a user interface.
+            const managerAddress = userAddress;
+            const emergencyManagerAddress = userAddress;
+            const feeReceiverAddress = userAddress;
+            const feePercentage = 0.5; // Example: 0.5% fee
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${BACKEND_API_URL}/create_vault`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        vault_name: vaultName, 
+                        vault_symbol: vaultSymbol,
+                        manager_address: managerAddress,
+                        emergency_manager_address: emergencyManagerAddress,
+                        fee_receiver_address: feeReceiverAddress,
+                        fee_percentage: feePercentage,
+                        asset_id: assetId,
+                        user_address: userAddress,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    await signAndSubmitTransaction(data.unsigned_xdr, 'create_vault');
+                } else {
+                    showMessage(`Error preparing vault creation: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Create vault error:', error);
+                showMessage(`An error occurred during vault creation: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
 
         depositBtn.addEventListener('click', async () => {
             const amount = parseFloat(depositAmountInput.value);
             const userAddress = localKeypair ? localKeypair.publicKey() : null;
 
-            if (isNaN(amount) || amount <= 0 || !userAddress) {
-                showMessage('Please enter a valid amount and ensure a wallet is loaded.', 'error');
+            if (isNaN(amount) || amount <= 0 || !userAddress || !activeContractId) {
+                showMessage('Please enter a valid amount and ensure a wallet and vault are loaded.', 'error');
                 return;
             }
 
             showLoading(true);
             try {
-                // Request unsigned transaction XDR from backend
                 const response = await fetch(`${BACKEND_API_URL}/deposit`, {
                     method: 'POST',
                     headers: {
@@ -414,7 +504,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    await signAndSubmitTransaction(data.unsigned_xdr);
+                    await signAndSubmitTransaction(data.unsigned_xdr, 'deposit');
                 } else {
                     showMessage(`Error preparing deposit: ${data.error || 'Unknown error'}`, 'error');
                 }
@@ -430,14 +520,13 @@
             const amount = parseFloat(withdrawAmountInput.value);
             const userAddress = localKeypair ? localKeypair.publicKey() : null;
 
-            if (isNaN(amount) || amount <= 0 || !userAddress) {
-                showMessage('Please enter a valid amount and ensure a wallet is loaded.', 'error');
+            if (isNaN(amount) || amount <= 0 || !userAddress || !activeContractId) {
+                showMessage('Please enter a valid amount and ensure a wallet and vault are loaded.', 'error');
                 return;
             }
 
             showLoading(true);
             try {
-                // Request unsigned transaction XDR from backend
                 const response = await fetch(`${BACKEND_API_URL}/withdraw`, {
                     method: 'POST',
                     headers: {
@@ -449,7 +538,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    await signAndSubmitTransaction(data.unsigned_xdr);
+                    await signAndSubmitTransaction(data.unsigned_xdr, 'withdraw');
                 } else {
                     showMessage(`Error preparing withdrawal: ${data.error || 'Unknown error'}`, 'error');
                 }
@@ -461,11 +550,10 @@
             }
         });
 
-
         getYieldsBtn.addEventListener('click', async () => {
             const userAddress = localKeypair ? localKeypair.publicKey() : null;
-            if (!userAddress) {
-                showMessage('Please create or import a wallet to get yields.', 'error');
+            if (!userAddress || !activeContractId) {
+                showMessage('Please create or import a wallet and a vault to get yields.', 'error');
                 return;
             }
 
@@ -501,7 +589,7 @@
                     showMessage('Wallet reloaded from last session.', 'success');
                 } catch (e) {
                     console.error('Error loading stored secret key:', e);
-                    localStorage.removeItem('stellarSecretKey'); // Clear invalid key
+                    localStorage.removeItem('stellarSecretKey');
                     showMessage('Invalid stored wallet. Please create or import again.', 'error');
                 }
             }

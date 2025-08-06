@@ -59,6 +59,8 @@ Before running this project, ensure you have the following installed and set up:
 
     * Or download from [ngrok.com](https://ngrok.com/).
 
+    * Sign up in [ngrok.com](https://ngrok.com/) to get a free plan to be able to execute and expose the backend.
+
 * **DeFindex Smart Contracts Deployed on Soroban Testnet**: You **must** have your DeFindex contracts deployed to the Soroban Testnet. Obtain the **Contract ID** of your deployed DeFindex vault contract.
 
 * **Testnet Stellar Account with XLM**: You'll need a Stellar Testnet account with some XLM to fund new wallets created by the app or to use an existing one. You can get XLM from the [Stellar Friendbot](https://www.google.com/search?q=https://friendbot.stellar.org/).
@@ -69,11 +71,11 @@ Follow these steps to get the DeFindex Telegram Mini App up and running.
 
 ### 1. Python Backend Setup
 
-1.  **Create Project Directory:**
+1.  **Clone the repository:**
 
     ```
-    mkdir defindex-telegram-app
-    cd defindex-telegram-app
+    git clone https://github.com/alexisyanez/mini-app-defindex.git
+    cd mini-app-defindex
 
     ```
 
@@ -97,16 +99,13 @@ Follow these steps to get the DeFindex Telegram Mini App up and running.
 
     ```
 
-5.  **Create `app.py`:**
-    Create a file named `app.py` in your `defindex-telegram-app` directory and paste the Python backend code (provided in the previous response) into it.
-
-6.  **Configure `app.py`:**
+5.  **Configure `app.py`:**
 
     * Open `app.py` and replace `"YOUR_DEFINDEX_CONTRACT_ID_HERE"` with your actual deployed DeFindex Soroban Contract ID.
 
     * Replace the placeholder `SOURCE_SECRET` with a funded Stellar Testnet secret key. This key is used by the backend for preparing transactions.
 
-7.  **Run Backend Server:**
+6.  **Run Backend Server:**
 
     ```
     python app.py
@@ -132,10 +131,7 @@ Telegram Mini Apps cannot directly access `localhost`. You need to expose your F
 
 ### 3. Frontend Setup
 
-1.  **Create `index.html`:**
-    Create a file named `index.html` in your `defindex-telegram-app` directory and paste the HTML frontend code (provided in the previous response) into it.
-
-2.  **Configure `index.html`:**
+1.  **Configure `index.html`:**
 
     * Open `index.html` and find the line:
 
@@ -146,7 +142,7 @@ Telegram Mini Apps cannot directly access `localhost`. You need to expose your F
 
     * **Replace `'http://localhost:5000'` with the `ngrok` HTTPS URL you copied in the previous step (e.g., `'https://your-random-subdomain.ngrok-free.app/api'`).**
 
-3.  **Host Frontend Locally:** You also need to host your `index.html` file.
+2.  **Host Frontend Locally:** You also need to host your `index.html` file.
 
     1.  **Open another New Terminal:** Navigate to your `defindex-telegram-app` directory.
 
@@ -157,18 +153,24 @@ Telegram Mini Apps cannot directly access `localhost`. You need to expose your F
 
         ```
 
-4.  **Expose Frontend with `ngrok`:**
+3.  **Expose Frontend with `localtunnel`:**
 
     1.  **Open yet another New Terminal:**
 
-    2.  Run `ngrok` for the frontend server:
+    2.  Since the free account fron `ngrok` just allow one url exposed, you must to install `localtunnel` for the frontend server:
 
         ```
-        ngrok http 8000
+        npm install -g localtunnel
 
         ```
 
-    3.  `ngrok` will provide a **new HTTPS URL** (e.g., `https://another-random-subdomain.ngrok-free.app`). **Copy this URL.** This is the URL you will give to Telegram.
+    4.  Run `localtunnel` in the same port as python http server
+        ```
+        lt --port 8000
+
+        ```
+
+    4.  `localtunnel` will provide a **new HTTPS URL** (e.g., `https://busy-ghosts-strive.loca.lt`). **Copy this URL.** This is the URL you will give to Telegram. Follow the instructions to copy and paste the requested password.
 
 ### 4. Telegram Bot Configuration
 
@@ -176,13 +178,13 @@ Telegram Mini Apps cannot directly access `localhost`. You need to expose your F
 
 2.  **Set Web App URL:**
 
-    * Use the command `/setwebapp`.
-
     * Select your existing bot (or create a new one with `/newbot`).
 
-    * When prompted, provide the **HTTPS URL of your hosted `index.html`** (the `ngrok` URL for port 8000 you copied in the previous step, e.g., `https://another-random-subdomain.ngrok-free.app`).
+    * When prompted, provide the **HTTPS URL of your hosted `index.html`** (the `localtunnel` URL for port 8000 you copied in the previous step, e.g., `https://busy-ghosts-strive.loca.lt`).
 
     * Give your web app a short name (e.g., "DeFindex Vault").
+
+    * Configure the bot opening the menu from botFather and setting up the menu button and put the url from `localtunnel`
 
 ## Usage
 
